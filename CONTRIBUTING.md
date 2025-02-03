@@ -4,7 +4,7 @@ First, thank you for contributing to Meilisearch! The goal of this document is t
 
 Remember that there are many ways to contribute other than writing code: writing [tutorials or blog posts](https://github.com/meilisearch/awesome-meilisearch), improving [the documentation](https://github.com/meilisearch/documentation), submitting [bug reports](https://github.com/meilisearch/meilisearch/issues/new?assignees=&labels=&template=bug_report.md&title=) and [feature requests](https://github.com/meilisearch/product/discussions/categories/feedback-feature-proposal)...
 
-The code in this repository is only concerned with managing multiple indexes, handling the update store, and exposing an HTTP API. Search and indexation are the domain of our core engine, [`milli`](https://github.com/meilisearch/milli), while tokenization is handled by [our `charabia` library](https://github.com/meilisearch/charabia/).
+Meilisearch can manage multiple indexes, handle the update store, and expose an HTTP API. Search and indexation are the domain of our core engine, [`milli`](https://github.com/meilisearch/meilisearch/tree/main/milli), while tokenization is handled by [our `charabia` library](https://github.com/meilisearch/charabia/).
 
 If Meilisearch does not offer optimized support for your language, please consider contributing to `charabia` by following the [CONTRIBUTING.md file](https://github.com/meilisearch/charabia/blob/main/CONTRIBUTING.md) and integrating your intended normalizer/segmenter.
 
@@ -18,9 +18,9 @@ If Meilisearch does not offer optimized support for your language, please consid
 
 ## Assumptions
 
-1. **You're familiar with [GitHub](https://github.com) and the [Pull Requests](https://help.github.com/en/github/collaborating-with-issues-and-pull-requests/about-pull-requests)(PR) workflow.**
-2. **You've read the Meilisearch [documentation](https://docs.meilisearch.com).**
-3. **You know about the [Meilisearch community](https://docs.meilisearch.com/learn/what_is_meilisearch/contact.html).
+1. **You're familiar with [GitHub](https://github.com) and the [Pull Requests (PR)](https://help.github.com/en/github/collaborating-with-issues-and-pull-requests/about-pull-requests) workflow.**
+2. **You've read the Meilisearch [documentation](https://www.meilisearch.com/docs).**
+3. **You know about the [Meilisearch community on Discord](https://discord.meilisearch.com).
    Please use this for help.**
 
 ## How to Contribute
@@ -52,11 +52,72 @@ cargo test
 
 This command will be triggered to each PR as a requirement for merging it.
 
+#### Faster build
+
+You can set the `LINDERA_CACHE` environment variable to speed up your successive builds by up to 2 minutes.
+It'll store some built artifacts in the directory of your choice.
+
+We recommend using the standard `$HOME/.cache/lindera` directory:
+```sh
+export LINDERA_CACHE=$HOME/.cache/lindera
+```
+
+Furthermore, you can improve incremental compilation by setting the `MEILI_NO_VERGEN` environment variable.
+Setting this variable will prevent the Meilisearch binary from being rebuilt each time the directory that hosts the Meilisearch repository changes.
+Do not enable this environment variable for production builds (as it will break the `version` route, among other things).
+
+#### Snapshot-based tests
+
+We are using [insta](https://insta.rs) to perform snapshot-based testing.
+We recommend using the insta tooling (such as `cargo-insta`) to update the snapshots if they change following a PR.
+
+New tests should use insta where possible rather than manual `assert` statements.
+
+Furthermore, we provide some macros on top of insta, notably a way to use snapshot hashes instead of inline snapshots, saving a lot of space in the repository.
+
+To effectively debug snapshot-based hashes, we recommend you export the `MEILI_TEST_FULL_SNAPS` environment variable so that snapshot are fully created locally:
+
+```sh
+export MEILI_TEST_FULL_SNAPS=true # add this to your .bashrc, .zshrc, ...
+```
+
+#### Test troubleshooting
+
 If you get a "Too many open files" error you might want to increase the open file limit using this command:
 
 ```bash
 ulimit -Sn 3000
 ```
+
+#### Build tools
+
+Meilisearch follows the [cargo xtask](https://github.com/matklad/cargo-xtask) workflow to provide some build tools.
+
+Run `cargo xtask --help` from the root of the repository to find out what is available.
+
+### Logging
+
+Meilisearch uses [`tracing`](https://lib.rs/crates/tracing) for logging purposes. Tracing logs are structured and can be displayed as JSON to the end user, so prefer passing arguments as fields rather than interpolating them in the message.
+
+Refer to the [documentation](https://docs.rs/tracing/0.1.40/tracing/index.html#using-the-macros) for the syntax of the spans and events.
+
+Logging spans are used for 3 distinct purposes:
+
+1. Regular logging
+2. Profiling
+3. Benchmarking
+
+As a result, the spans should follow some rules:
+
+- They should not be put on functions that are called too often. That is because opening and closing a span causes some overhead. For regular logging, avoid putting spans on functions that are taking less than a few hundred nanoseconds. For profiling or benchmarking, avoid putting spans on functions that are taking less than a few microseconds.
+- For profiling and benchmarking, use the `TRACE` level.
+- For profiling and benchmarking, use the following `target` prefixes:
+  - `indexing::` for spans meant when profiling the indexing operations.
+  - `search::` for spans meant when profiling the search operations.
+
+### Benchmarking
+
+See [BENCHMARKS.md](./BENCHMARKS.md)
 
 ## Git Guidelines
 
@@ -103,25 +164,9 @@ The full Meilisearch release process is described in [this guide](https://github
 
 Depending on the developed feature, you might need to provide a prototyped version of Meilisearch to make it easier to test by the users.
 
-The prototype name must follow this convention: `prototype-X-Y` where
-- `X` is the feature name formatted in `kebab-case`
-- `Y` is the version of the prototype, starting from `0`.
-
-Example: `prototype-auto-resize-0`.
-
-Steps to create a prototype:
-
-1. In your terminal, go to the last commit of your branch (the one you want to provide as a prototype).
-2. Create a tag following the convention: `git tag prototype-X-Y`
-3. Push the tag: `git push origin prototype-X-Y`
-4. Check the [Docker CI](https://github.com/meilisearch/meilisearch/actions/workflows/publish-docker-images.yml) is now running.
-
-🐳 Once the CI has finished to run (~1h30), a Docker image named `prototype-X-Y` will be available on [DockerHub](https://hub.docker.com/repository/docker/getmeili/meilisearch/general). People can use it with the following command: `docker run -p 7700:7700 -v $(pwd)/meili_data:/meili_data getmeili/meilisearch:prototype-X-Y`. <br>
-More information about [how to run Meilisearch with Docker](https://docs.meilisearch.com/learn/cookbooks/docker.html#download-meilisearch-with-docker).
-
-⚙️ However, no binaries will be created. If the users do not use Docker, they can go to the `prototype-X-Y` tag in the Meilisearch repository and compile from the source code.
-
-⚠️ When sharing a prototype with users, prevent them from using it in production. Prototypes are only for test purposes.
+This happens in two steps:
+- [Release the prototype](https://github.com/meilisearch/engine-team/blob/main/resources/prototypes.md#how-to-publish-a-prototype)
+- [Communicate about it](https://github.com/meilisearch/engine-team/blob/main/resources/prototypes.md#communication)
 
 ### Release assets
 

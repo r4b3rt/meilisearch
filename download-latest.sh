@@ -33,10 +33,12 @@ get_latest() {
         exit 1
     fi
 
-    if [ -z "$GITHUB_PAT" ]; then
-        curl -s "$latest_release" > "$temp_file" || return 1
-    else
+    if [ -n "$GITHUB_TOKEN" ]; then
+        curl -H "Authorization: Bearer $GITHUB_TOKEN" -s "$latest_release" > "$temp_file" || return 1
+    elif [ -n "$GITHUB_PAT" ]; then
         curl -H "Authorization: token $GITHUB_PAT" -s "$latest_release" > "$temp_file" || return 1
+    else
+        curl -s "$latest_release" > "$temp_file" || return 1
     fi
 
     latest="$(cat "$temp_file" | grep '"tag_name":' | cut -d ':' -f2 | tr -d '"' | tr -d ',' | tr -d ' ')"
@@ -103,7 +105,7 @@ not_available_failure_usage() {
     printf "$RED%s\n$DEFAULT" 'ERROR: Meilisearch binary is not available for your OS distribution or your architecture yet.'
     echo ''
     echo 'However, you can easily compile the binary from the source files.'
-    echo 'Follow the steps at the page ("Source" tab): https://docs.meilisearch.com/learn/getting_started/installation.html'
+    echo 'Follow the steps at the page ("Source" tab): https://www.meilisearch.com/docs/learn/getting_started/installation'
 }
 
 fetch_release_failure_usage() {
